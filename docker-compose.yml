@@ -1,0 +1,88 @@
+version: '3'
+services:
+    laravel.test:
+        build:
+            context: ../social-app/docker/8.2
+            dockerfile: Dockerfile
+        image: social-app
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        ports:
+            - '${APP_PORT:-80}:80'
+            - '${VITE_PORT:-5173}:${VITE_PORT:-5173}'
+        volumes:
+            - '../social-app:/var/www/html'
+        networks:
+            - social-app
+        depends_on:
+            - mysql
+            - redis
+    mysql:
+        image: 'mysql/mysql-server:8.0'
+        ports:
+            - '${FORWARD_DB_PORT:-3306}:3306'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_HOST: "%"
+            MYSQL_DATABASE: '${DB_DATABASE}'
+            MYSQL_USER: '${DB_USERNAME}'
+            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        volumes:
+            - 'social-app-mysql:/var/lib/mysql'
+            - '../social-app/vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
+        networks:
+            - social-app
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}"]
+            retries: 3
+            timeout: 5s
+    redis:
+        image: 'redis:alpine'
+        ports:
+            - '${FORWARD_REDIS_PORT:-6379}:6379'
+        volumes:
+            - 'social-app-redis:/data'
+        networks:
+            - social-app
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            retries: 3
+            timeout: 5s
+    zookeeper:
+        image: 'bitnami/zookeeper:latest'
+        ports:
+            - '2181:2181'
+        environment:
+            ALLOW_ANONYMOUS_LOGIN: 'yes'
+        networks:
+            - social-app
+    kafka:
+        image: 'bitnami/kafka:latest'
+        ports:
+            - '9092:9092'
+        environment:
+            KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+            KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+            ALLOW_PLAINTEXT_LISTENER: 'yes'
+        networks:
+            - social-app
+        depends_on:
+            - zookeeper
+    elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.13.2
+        environment:
+            - discovery.type=single-node
+            - ES_JAVA_OPTS=-Xms1g -Xmx1g
+        ports:
+            - '9200:9200'
+        networks:
+            - social-app
+networks:
+    social-app:
+        driver: bridge
+volumes:
+    social-app-mysql:
+        driver: local
+    social-app-redis:
+        driver: local
