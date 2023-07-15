@@ -1,6 +1,6 @@
 version: '3'
 services:
-    laravel.test:
+    main-app:
         build:
             context: ../social-app/docker/8.2
             dockerfile: Dockerfile
@@ -15,18 +15,34 @@ services:
         networks:
             - social-app
         depends_on:
-            - mysql
+            - main-app-mysql
             - redis
-    mysql:
+    notification-service:
+        build:
+            context: ../social-app-notification-service/docker/8.2
+            dockerfile: Dockerfile
+        image: social-app-notification-service
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        ports:
+            - '${NOTIFICATION_APP_PORT:-81}:81'
+        volumes:
+            - '../social-app-notification-service:/var/www/html'
+        networks:
+            - social-app
+        depends_on:
+            - notification-mysql
+            - redis
+    main-app-mysql:
         image: 'mysql/mysql-server:8.0'
         ports:
-            - '${FORWARD_DB_PORT:-3306}:3306'
+            - '${MAIN_FORWARD_DB_PORT:-3306}:3306'
         environment:
-            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_PASSWORD: '${MAIN_DB_PASSWORD}'
             MYSQL_ROOT_HOST: "%"
-            MYSQL_DATABASE: '${DB_DATABASE}'
-            MYSQL_USER: '${DB_USERNAME}'
-            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_DATABASE: '${MAIN_DB_DATABASE}'
+            MYSQL_USER: '${MAIN_DB_USERNAME}'
+            MYSQL_PASSWORD: '${MAIN_DB_PASSWORD}'
             MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
         volumes:
             - 'social-app-mysql:/var/lib/mysql'
@@ -34,7 +50,27 @@ services:
         networks:
             - social-app
         healthcheck:
-            test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}"]
+            test: ["CMD", "mysqladmin", "ping", "-p${MAIN_DB_PASSWORD}"]
+            retries: 3
+            timeout: 5s
+    notification-mysql:
+        image: 'mysql/mysql-server:8.0'
+        ports:
+            - '${NOTIFICATION_FORWARD_DB_PORT:-3307}:3306'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${NOTIFICATION_DB_PASSWORD}'
+            MYSQL_ROOT_HOST: "%"
+            MYSQL_DATABASE: '${NOTIFICATION_DB_DATABASE}'
+            MYSQL_USER: '${NOTIFICATION_DB_USERNAME}'
+            MYSQL_PASSWORD: '${NOTIFICATION_DB_PASSWORD}'
+            MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        volumes:
+            - 'notification-app-mysql:/var/lib/mysql'
+            - '../social-app-notification-service/vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
+        networks:
+            - social-app
+        healthcheck:
+            test: [ "CMD", "mysqladmin", "ping", "-p${NOTIFICATION_DB_PASSWORD}" ]
             retries: 3
             timeout: 5s
     redis:
@@ -83,6 +119,8 @@ networks:
         driver: bridge
 volumes:
     social-app-mysql:
+        driver: local
+    notification-app-mysql:
         driver: local
     social-app-redis:
         driver: local
