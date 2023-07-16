@@ -33,6 +33,23 @@ services:
         depends_on:
             - notification-mysql
             - redis
+    elastic-service:
+        build:
+            context: ../social-app-elasticsearch-service/docker/8.2
+            dockerfile: Dockerfile
+        image: social-app-elastic-service
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        ports:
+            - '${ELASTIC_APP_PORT:-82}:82'
+        volumes:
+            - '../social-app-elasticsearch-service:/var/www/html'
+        networks:
+            - social-app
+        depends_on:
+            - elastic-mysql
+            - elasticsearch
+            - redis
     main-app-mysql:
         image: 'mysql/mysql-server:8.0'
         ports:
@@ -71,6 +88,26 @@ services:
             - social-app
         healthcheck:
             test: [ "CMD", "mysqladmin", "ping", "-p${NOTIFICATION_DB_PASSWORD}" ]
+            retries: 3
+            timeout: 5s
+    elastic-mysql:
+        image: 'mysql/mysql-server:8.0'
+        ports:
+            - '${ELASTIC_FORWARD_DB_PORT:-3308}:3306'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${ELASTIC_DB_PASSWORD}'
+            MYSQL_ROOT_HOST: "%"
+            MYSQL_DATABASE: '${ELASTIC_DB_DATABASE}'
+            MYSQL_USER: '${ELASTIC_DB_USERNAME}'
+            MYSQL_PASSWORD: '${ELASTIC_DB_PASSWORD}'
+            MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        volumes:
+            - 'elastic-app-mysql:/var/lib/mysql'
+            - '../social-app-elasticsearch-service/vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
+        networks:
+            - social-app
+        healthcheck:
+            test: [ "CMD", "mysqladmin", "ping", "-p${ELASTIC_DB_PASSWORD}" ]
             retries: 3
             timeout: 5s
     redis:
@@ -121,6 +158,8 @@ volumes:
     social-app-mysql:
         driver: local
     notification-app-mysql:
+        driver: local
+    elastic-app-mysql:
         driver: local
     social-app-redis:
         driver: local
