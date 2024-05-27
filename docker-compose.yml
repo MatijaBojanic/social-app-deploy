@@ -25,7 +25,7 @@ services:
         extra_hosts:
             - 'host.docker.internal:host-gateway'
         ports:
-            - '${NOTIFICATION_APP_PORT:-81}:81'
+            - '${NOTIFICATION_APP_PORT:-81}:80'
         volumes:
             - '../social-app-notification-service:/var/www/html'
         networks:
@@ -41,7 +41,7 @@ services:
         extra_hosts:
             - 'host.docker.internal:host-gateway'
         ports:
-            - '${ELASTIC_APP_PORT:-82}:82'
+            - '${ELASTIC_APP_PORT:-82}:80'
         volumes:
             - '../social-app-elasticsearch-service:/var/www/html'
         networks:
